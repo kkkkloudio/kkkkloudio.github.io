@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Foglio Ore ⏰</title>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+    <style>
+      :root { font-family: system-ui, sans-serif; color: #1f2937; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: linear-gradient(180deg, #eef4ff, #f8fafc 40%); }
+      .top { position: sticky; top: 0; background: #ffffffee; backdrop-filter: blur(6px); padding: 12px 16px 10px; border-bottom: 1px solid #e5e7eb; z-index: 5; }
+      h1 { font-size: 1.4rem; margin: 0; }
+      .sub { color: #6b7280; font-size: 0.85rem; margin: 2px 0 10px; }
+      .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+      select, input { font: inherit; padding: 10px; border: 1px solid #d1d5db; border-radius: 12px; background: #fff; }
+      select { text-transform: capitalize; }
+      button { font: inherit; border: none; border-radius: 12px; cursor: pointer; padding: 9px 12px; background: #2563eb; color: #fff; font-weight: 600; }
+      button.sec { background: #eef2ff; color: #3730a3; font-weight: 500; }
+      button.now { background: #16a34a; padding: 8px 10px; }
+      .hint { font-size: 0.78rem; color: #9ca3af; margin-top: 6px; }
+      main { max-width: 640px; margin: 0 auto; padding: 12px 12px 70px; }
+      .card { background: #fff; border-radius: 16px; box-shadow: 0 1px 6px rgba(0,0,0,0.07); padding: 12px 14px; margin-bottom: 10px; }
+      .card.off { opacity: 0.6; }
+      .giorno { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+      .gg { font-size: 1.2rem; font-weight: 700; }
+      .sett { color: #6b7280; font-size: 0.9rem; }
+      .badge { margin-left: auto; background: #fee2e2; color: #b91c1c; font-size: 0.75rem; padding: 3px 8px; border-radius: 999px; font-weight: 600; }
+      .badge.fest { background: #fef3c7; color: #92400e; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .field { display: flex; flex-direction: column; gap: 3px; }
+      .field label { font-size: 0.72rem; color: #6b7280; font-weight: 600; }
+      .frow { display: flex; gap: 6px; align-items: center; }
+      .frow input { flex: 1; min-width: 0; padding: 8px; }
+      .actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+      .ext { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e5e7eb; }
+      .ext.open { display: block; }
+      footer { text-align: center; color: #9ca3af; font-size: 0.8rem; padding: 20px; }
+      #toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: #111827; color: #fff; padding: 10px 16px; border-radius: 999px; font-size: 0.9rem; opacity: 0; transition: 0.3s; pointer-events: none; z-index: 9; max-width: 90vw; }
+      #toast.on { opacity: 1; }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <h1>⏰ Foglio Ore</h1>
+      <div class="sub">Il foglio ore di Carlo che si compila quasi da solo — e diventa Excel identico.</div>
+      <div class="controls">
+        <select id="mese"></select>
+        <input type="number" id="anno" min="2020" max="2100" style="width:90px" />
+        <button id="esporta">⬇ Esporta Excel</button>
+      </div>
+      <div class="hint">⏰ = segna l'ora di adesso · ✓ Solito = riempie il giorno col tuo giro tipico</div>
+    </div>
+    <main id="lista"></main>
+    <footer>Fatto da Arthur 🤖 per Carlo — le ore si segnano, la noia no.</footer>
+    <div id="toast"></div>
+
+    <datalist id="dl-sq">
+      <option value="ike"></option><option value="bordin"></option>
+      <option value="zanirato"></option><option value="Filippo"></option>
+      <option value="ferie"></option><option value="pioggia"></option><option value="festivo"></option>
+    </datalist>
+    <datalist id="dl-cl">
+      <option value="Bologna"></option><option value="Hera Bologna"></option><option value="Modena"></option>
+    </datalist>
+
+    <script>
+      var M = ['gennaio','febbraio','marzo','aprile','maggio','giugno','luglio','agosto','settembre','ottobre','novembre','dicembre'];
+      var SETT = ['lunedì','martedì','mercoledì','giovedì','venerdì','sabato','domenica'];
+      var FEST_FISSI = {'01-01':'Capodanno','01-06':'Epifania','04-25':'Liberazione','05-01':'Festa del lavoro','06-02':'Festa della Repubblica','08-15':'Ferragosto','11-01':'Ognissanti','12-08':'Immacolata','12-25':'Natale','12-26':'Santo Stefano'};
+      var CAMPI = ['sq','targa','d','kmi','f','g','h','i','j','k','l','kmf','ped','monte','rif','cliente'];
+      var HEADERS = ['GG','SQUADRA (OPERATORE IN COPPIA CON)','TARGATA MEZZO','ORA INIZIO VIAGGIO PER RAGGIUNGERE IL CANTIERE','KM INIZIO VIAGGIO','ORA FINE VIAGGIO E INIZIO LAVORO IN CAMPO - INIZIO RILEVAZIONE','ORA FINE LAVORO IN CAMPO _FINE RILEVAZIONE','INIZIO PAUSA PRANZO','FINE PAUSA PRANZO','ORA INIZIO LAVORO IN CAMPO _INIZIO RILEVAZIONE','ORA FINE RILEVAZIONI IN CAMPO - INIZIO VIAGGIO','ORA FINE VIAGGIO','KM FINE VIAGGIO','KM PERCORSI A PIEDI','MONTE ORE','RIFORNIMENTO (Si/no oppure € di gasolio/benzina)','CLIENTE/CANTIERE'];
+
+      var oggi = new Date();
+      var mese = oggi.getMonth() + 1;
+      var anno = oggi.getFullYear();
+      var giorni = {};
+
+      function pasqua(y) {
+        var a=y%19, b=Math.floor(y/100), c=y%100, d=Math.floor(b/4), e=b%4, f=Math.floor((b+8)/25),
+            g=Math.floor((b-f+1)/3), h=(19*a+b-d-g+15)%30, i=Math.floor(c/4), k=c%4,
+            l=(32+2*e+2*i-h-k)%7, m=Math.floor((a+11*h+22*l)/451),
+            mo=Math.floor((h+l-7*m+114)/31), da=((h+l-7*m+114)%31)+1;
+        return [y, mo-1, da];
+      }
+      function festivoDi(y, m, g) {
+        var key = (m<10?'0'+m:m)+'-'+(g<10?'0'+g:g);
+        if (FEST_FISSI[key]) return FEST_FISSI[key];
+        var p = pasqua(y);
+        var same = function(a){ return a[1]===m-1 && a[2]===g; };
+        var pm = [p[0], p[1], p[2]+1];
+        if (same(p)) return 'Pasqua';
+        if (same(pm)) return 'Pasquetta';
+        return null;
+      }
+      function keyStato() { return 'foglioore-' + anno + '-' + mese; }
+      function carica() { try { giorni = JSON.parse(localStorage.getItem(keyStato()) || '{}'); } catch (e) { giorni = {}; } }
+      function salva() { try { localStorage.setItem(keyStato(), JSON.stringify(giorni)); } catch (e) {} }
+      function adesso() {
+        var t = new Date();
+        return (t.getHours()<10?'0':'')+t.getHours()+':'+(t.getMinutes()<10?'0':'')+t.getMinutes();
+      }
+      function toast(msg) {
+        var t = document.getElementById('toast');
+        t.textContent = msg; t.classList.add('on');
+        setTimeout(function(){ t.classList.remove('on'); }, 2600);
+      }
+      function haDati(g) {
+        var d = giorni[g]; if (!d) return false;
+        return CAMPI.some(function(k){ return (d[k]||'') !== ''; });
+      }
+      function ultimo(campo, def) {
+        for (var g = 31; g >= 1; g--) {
+          var d = giorni[g];
+          if (d && d[campo]) return d[campo];
+        }
+        return def;
+      }
+      function copiaGiorno(da, a) {
+        var src = giorni[da]; if (!src) return false;
+        var dst = {}; for (var i = 0; i < CAMPI.length; i++) dst[CAMPI[i]] = src[CAMPI[i]] || '';
+        giorni[a] = dst; return true;
+      }
+
+      function campoOra(g, label, f, val) {
+        return '<div class="field"><label>' + label + '</label><div class="frow">'
+          + '<input type="time" data-f="' + f + '" data-day="' + g + '" value="' + (val||'') + '"/>'
+          + '<button class="now" data-now="' + f + '" data-day="' + g + '" title="Segna adesso">⏰</button>'
+          + '</div></div>';
+      }
+      function campoTesto(g, label, f, val, dl, tipo) {
+        return '<div class="field"><label>' + label + '</label><div class="frow">'
+          + '<input type="' + (tipo||'text') + '" list="' + dl + '" data-f="' + f + '" data-day="' + g + '" value="' + (val||'') + '"/>'
+          + '</div></div>';
+      }
+
+      function render() {
+        carica();
+        var lista = document.getElementById('lista');
+        var dim = new Date(anno, mese, 0).getDate();
+        var html = '';
+        for (var g = 1; g <= dim; g++) {
+          var f = giorni[g] || {};
+          var d = new Date(anno, mese-1, g), wd = d.getDay(), fest = festivoDi(anno, mese, g);
+          var wdName = SETT[wd === 0 ? 6 : wd-1];
+          var pieno = haDati(g);
+          var off = (wd === 0 || wd === 6 || fest) && !pieno;
+          html += '<div class="card' + (off ? ' off' : '') + '">';
+          html += '<div class="giorno"><span class="gg">' + g + '</span><span class="sett">' + wdName + (fest ? ' • ' + fest : '') + '</span>';
+          if (off) {
+            var lbl = wd === 6 ? 'sabato' : wd === 0 ? 'domenica' : 'festivo';
+            html += '<span class="badge' + (wd !== 0 && wd !== 6 ? ' fest' : '') + '">' + lbl + '</span>';
+          }
+          html += '</div>';
+          html += '<div class="grid">'
+            + campoOra(g, 'Inizio viaggio', 'd', f.d)
+            + campoOra(g, 'Arrivo cantiere', 'f', f.f)
+            + campoOra(g, 'Fine rilevazioni', 'k', f.k)
+            + campoOra(g, 'Arrivo a casa', 'l', f.l)
+            + '</div>';
+          html += '<div class="grid" style="margin-top:8px">'
+            + campoTesto(g, 'Squadra', 'sq', f.sq, 'dl-sq')
+            + campoTesto(g, 'Cliente / Cantiere', 'cliente', f.cliente, 'dl-cl')
+            + '</div>';
+          html += '<div class="actions">'
+            + '<button data-act="solito" data-day="' + g + '">✓ Solito</button>'
+            + '<button data-act="ieri" data-day="' + g + '" class="sec">⧉ Ieri</button>'
+            + '<button data-act="ripeti" data-day="' + g + '" class="sec">⇊ Ripeti</button>'
+            + '<button data-act="piu" data-day="' + g + '" class="sec">Più ▾</button>'
+            + '<button data-act="x" data-day="' + g + '" class="sec" style="color:#ef4444">✕</button>'
+            + '</div>';
+          html += '<div class="ext" id="ext' + g + '">';
+          html += '<div class="grid">'
+            + campoOra(g, 'Inizio pausa pranzo', 'h', f.h)
+            + campoOra(g, 'Fine pausa pranzo', 'i', f.i)
+            + campoTesto(g, 'Km inizio viaggio', 'kmi', f.kmi)
+            + campoTesto(g, 'Km fine / note', 'kmf', f.kmf)
+            + campoTesto(g, 'Km a piedi', 'ped', f.ped)
+            + campoTesto(g, 'Rifornimento (Si/No o €)', 'rif', f.rif)
+            + '</div>';
+          html += '<div class="grid" style="margin-top:8px">'
+            + '<div class="field"><label>Monte ore</label><div class="frow">'
+            + '<input type="number" step="0.25" min="0" data-f="monte" data-day="' + g + '" value="' + (f.monte||'') + '"/>'
+            + '<button class="sec" data-act="calc" data-day="' + g + '" title="Calcola dalle ore">🧮</button>'
+            + '</div></div>'
+            + campoTesto(g, 'Targa mezzo', 'targa', f.targa)
+            + '</div>';
+          html += '</div></div>';
+        }
+        lista.innerHTML = html;
+      }
+
+      document.getElementById('lista').addEventListener('input', function(e) {
+        var t = e.target;
+        if (!t.dataset || !t.dataset.f) return;
+        var g = +t.dataset.day, campo = t.dataset.f;
+        var d = giorni[g] || (giorni[g] = {});
+        d[campo] = t.value;
+        salva();
+      });
+
+      document.getElementById('lista').addEventListener('click', function(e) {
+        var b = e.target.closest('button');
+        if (!b || !b.dataset.day) return;
+        var g = +b.dataset.day;
+        var d = giorni[g] || (giorni[g] = {});
+        if (b.dataset.now) {
+          d[b.dataset.now] = adesso();
+          salva(); render();
+          toast('Ora segnata: ' + adesso() + ' ⏰');
+          return;
+        }
+        var act = b.dataset.act;
+        if (!act) return;
+        if (act === 'solito') {
+          d.d = '07:00'; d.f = '08:15'; d.k = '15:30'; d.l = '16:30';
+          if (!d.sq) d.sq = ultimo('sq', 'ike');
+          if (!d.cliente) d.cliente = ultimo('cliente', 'Bologna');
+          salva(); render();
+          toast('Giorno ' + g + ': solito giro ✓');
+        } else if (act === 'ieri') {
+          var trov = null;
+          for (var p = g-1; p >= 1; p--) { if (haDati(p)) { trov = p; break; } }
+          if (trov === null) { toast('Nessun giorno compilato prima di questo'); return; }
+          copiaGiorno(trov, g);
+          salva(); render();
+          toast('Copiato dal giorno ' + trov + ' ✓');
+        } else if (act === 'ripeti') {
+          var n = parseInt(prompt('Ripetere il giorno ' + g + ' sui prossimi quanti giorni LAVORATIVI? (salta sabato, domenica e festivi)', '5'), 10);
+          if (!n || n < 1) return;
+          var fatti = 0, x = g;
+          while (fatti < n && x < 31) {
+            x++;
+            var wd2 = new Date(anno, mese-1, x).getDay();
+            var fest2 = festivoDi(anno, mese, x);
+            if (wd2 === 0 || wd2 === 6 || fest2) continue;
+            copiaGiorno(g, x); fatti++;
+          }
+          salva(); render();
+          toast('Copiato su ' + fatti + ' giorni lavorativi ✓');
+        } else if (act === 'piu') {
+          document.getElementById('ext' + g).classList.toggle('open');
+        } else if (act === 'x') {
+          if (confirm('Svuotare il giorno ' + g + '?')) {
+            delete giorni[g]; salva(); render();
+          }
+        } else if (act === 'calc') {
+          if (!d.f || !d.k) { toast('Servono arrivo cantiere e fine rilevazioni'); return; }
+          function min(v) { var p = v.split(':'); return +p[0]*60 + +p[1]; }
+          var tot = min(d.k) - min(d.f);
+          if (d.h && d.i) tot -= (min(d.i) - min(d.h));
+          d.monte = String(Math.round(tot/15)*15/60);
+          salva(); render();
+          toast('Monte ore: ' + d.monte + ' 🧮');
+        }
+      });
+
+      var sel = document.getElementById('mese');
+      for (var i = 0; i < 12; i++) {
+        var o = document.createElement('option');
+        o.value = i+1; o.textContent = M[i];
+        sel.appendChild(o);
+      }
+      sel.value = mese;
+      sel.addEventListener('change', function(){ mese = +sel.value; render(); });
+      var inpAnno = document.getElementById('anno');
+      inpAnno.value = anno;
+      inpAnno.addEventListener('change', function(){
+        var v = parseInt(inpAnno.value, 10);
+        if (v >= 2020 && v <= 2100) { anno = v; render(); }
+      });
+
+      function tt(v) { return v ? String(v).replace(/^0/, '') : ''; }
+
+      document.getElementById('esporta').addEventListener('click', function() {
+        if (typeof ExcelJS === 'undefined') {
+          toast('Qui in anteprima il download è bloccato: funziona dalla versione online! 📱');
+          return;
+        }
+        var wb = new ExcelJS.Workbook();
+        var ws = wb.addWorksheet(M[mese-1] + ' ' + anno, { views: [{ showGridLines: false }] });
+        ws.getCell('K1').value = 'CARLO SCHIESARO  ' + M[mese-1] + ' ' + anno;
+        ws.getCell('K1').font = { bold: true, size: 12 };
+        for (var i = 0; i < 17; i++) {
+          var c = ws.getRow(2).getCell(i+1);
+          c.value = HEADERS[i];
+          c.font = { bold: true, size: 10 };
+          c.alignment = { wrapText: true, vertical: 'middle', horizontal: 'center' };
+          c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFEFEF' } };
+        }
+        ws.getRow(2).height = 66;
+        for (var g = 1; g <= 31; g++) {
+          var r = ws.getRow(g+2);
+          r.getCell(1).value = g;
+          r.getCell(1).numFmt = '#,##0;(#,##0);-';
+          r.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+          var f = giorni[g] || {};
+          var pieno = haDati(g);
+          var wd = new Date(anno, mese-1, g).getDay();
+          var fest = festivoDi(anno, mese, g);
+          r.getCell(2).value = f.sq || (pieno ? '' : (wd === 6 ? 'sabato' : wd === 0 ? 'domenica' : fest ? 'festivo' : ''));
+          r.getCell(3).value = f.targa || '';
+          r.getCell(4).value = tt(f.d);
+          r.getCell(5).value = f.kmi || '';
+          r.getCell(6).value = tt(f.f);
+          r.getCell(7).value = tt(f.g);
+          r.getCell(8).value = tt(f.h);
+          r.getCell(9).value = tt(f.i);
+          r.getCell(10).value = tt(f.j);
+          r.getCell(11).value = tt(f.k);
+          r.getCell(12).value = tt(f.l);
+          r.getCell(13).value = f.kmf || '';
+          r.getCell(14).value = f.ped || '';
+          r.getCell(15).value = f.monte === '' || f.monte == null ? '' : Number(f.monte);
+          r.getCell(16).value = f.rif || '';
+          r.getCell(17).value = f.cliente || '';
+        }
+        for (var rr = 2; rr <= 33; rr++) {
+          for (var cc = 1; cc <= 17; cc++) {
+            ws.getRow(rr).getCell(cc).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+          }
+        }
+        var widths = [5,16,12,14,12,18,18,12,12,18,18,12,14,13,10,17,16];
+        for (var w = 0; w < 17; w++) ws.getColumn(w+1).width = widths[w];
+        ws.views[0].state = 'frozen'; ws.views[0].ySplit = 2; ws.views[0].xSplit = 1;
+        wb.xlsx.writeBuffer().then(function(buf) {
+          var blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'scheda presenze ' + M[mese-1] + ' ' + anno + '.xlsx';
+          document.body.appendChild(a); a.click();
+          setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+          toast('Foglio Excel pronto! Controllalo e invialo 📥');
+        });
+      });
+
+      render();
+    </script>
+  </body>
+</html>
