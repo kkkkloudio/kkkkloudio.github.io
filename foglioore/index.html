@@ -48,6 +48,9 @@
         <select id="mese"></select>
         <input type="number" id="anno" min="2020" max="2100" style="width:90px" />
         <button id="esporta">⬇ Esporta Excel</button>
+        <button id="backup" class="sec">💾 Backup</button>
+        <button id="ripristina" class="sec">📂 Ripristina</button>
+        <input type="file" id="filein" accept=".json,application/json" style="display:none" />
       </div>
       <div class="hint">⏰ = segna l'ora di adesso · ✓ Solito = riempie il giorno col tuo giro tipico</div>
     </div>
@@ -334,6 +337,44 @@
           setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
           toast('Foglio Excel pronto! Controllalo e invialo 📥');
         });
+      });
+
+      document.getElementById('backup').addEventListener('click', function() {
+        var out = {}, n = 0;
+        try {
+          for (var i = 0; i < localStorage.length; i++) {
+            var k = localStorage.key(i);
+            if (k.indexOf('foglioore-') === 0) { out[k] = localStorage.getItem(k); n++; }
+          }
+        } catch (e) {}
+        if (!n) { toast('Niente da salvare per ora'); return; }
+        var blob = new Blob([JSON.stringify(out)], { type: 'application/json' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'foglioore-backup.json';
+        document.body.appendChild(a); a.click();
+        setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+        toast('Backup scaricato! Mettilo al sicuro 💾');
+      });
+      document.getElementById('ripristina').addEventListener('click', function() {
+        document.getElementById('filein').click();
+      });
+      document.getElementById('filein').addEventListener('change', function(e) {
+        var f = e.target.files[0]; if (!f) return;
+        var fr = new FileReader();
+        fr.onload = function() {
+          try {
+            var data = JSON.parse(fr.result);
+            var n = 0;
+            for (var k in data) {
+              if (k.indexOf('foglioore-') === 0) { localStorage.setItem(k, data[k]); n++; }
+            }
+            render();
+            toast('Ripristinati ' + n + ' mesi ✓');
+          } catch (err) { toast('File di backup non valido 😕'); }
+        };
+        fr.readAsText(f);
+        e.target.value = '';
       });
 
       render();
