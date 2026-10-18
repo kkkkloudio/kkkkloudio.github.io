@@ -154,7 +154,11 @@
           html += '</div>';
           html += '<div class="grid">'
             + campoOra(g, 'Inizio viaggio', 'd', f.d)
-            + campoOra(g, 'Arrivo cantiere', 'f', f.f)
+            + campoOra(g, 'Inizio lavoro (arrivo cantiere)', 'f', f.f)
+            + campoOra(g, 'Fine lavoro campo', 'g', f.g)
+            + campoOra(g, 'Inizio pausa pranzo', 'h', f.h)
+            + campoOra(g, 'Fine pausa pranzo', 'i', f.i)
+            + campoOra(g, 'Ripresa lavoro campo', 'j', f.j)
             + campoOra(g, 'Fine rilevazioni', 'k', f.k)
             + campoOra(g, 'Arrivo a casa', 'l', f.l)
             + '</div>';
@@ -171,8 +175,6 @@
             + '</div>';
           html += '<div class="ext" id="ext' + g + '">';
           html += '<div class="grid">'
-            + campoOra(g, 'Inizio pausa pranzo', 'h', f.h)
-            + campoOra(g, 'Fine pausa pranzo', 'i', f.i)
             + campoTesto(g, 'Km inizio viaggio', 'kmi', f.kmi)
             + campoTesto(g, 'Km fine / note', 'kmf', f.kmf)
             + campoTesto(g, 'Km a piedi', 'ped', f.ped)
@@ -245,7 +247,7 @@
             delete giorni[g]; salva(); render();
           }
         } else if (act === 'calc') {
-          if (!d.f || !d.k) { toast('Servono arrivo cantiere e fine rilevazioni'); return; }
+          if (!d.f || !d.k) { toast('Servono inizio e fine lavoro'); return; }
           function min(v) { var p = v.split(':'); return +p[0]*60 + +p[1]; }
           var tot = min(d.k) - min(d.f);
           if (d.h && d.i) tot -= (min(d.i) - min(d.h));
